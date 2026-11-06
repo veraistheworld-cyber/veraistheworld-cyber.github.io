@@ -2,12 +2,24 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Particle Cabinet</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    html, body { width: 100%; height: 100%; overflow: hidden; background: #1c2736; cursor: none; }
-    canvas { display: block; cursor: none; }
+    html, body {
+      width: 100%;
+      height: 100%;
+      height: 100dvh;
+      overflow: hidden;
+      background: #1c2736;
+      cursor: none;
+      touch-action: none;
+      overscroll-behavior: none;
+      -webkit-user-select: none;
+      user-select: none;
+      -webkit-touch-callout: none;
+    }
+    canvas { display: block; width: 100%; height: 100%; cursor: none; touch-action: none; }
     .copy {
       position: absolute;
       left: 7vw;
@@ -54,6 +66,17 @@
       font-size: 12px;
       pointer-events: none;
     }
+    @media (max-width: 700px) {
+      .copy { left: 6vw; top: 7%; }
+      .copy h1 { font-size: clamp(28px, 9vw, 44px); }
+      .copy p { margin-top: 3.2vh; font-size: 13px; }
+      .hint {
+        left: 18px;
+        right: 18px;
+        bottom: max(16px, env(safe-area-inset-bottom));
+        text-align: center;
+      }
+    }
   </style>
 </head>
 <body>
@@ -65,7 +88,7 @@
   <div class="label" id="label-07">07</div>
   <div class="label" id="label-04">04 CORE</div>
   <div class="label" id="label-01">01</div>
-  <div class="hint">移动鼠标穿梭打散粒子 · 按住拖动旋转 · 滚轮缩放</div>
+  <div class="hint" id="hint">单指滑动穿梭打散粒子 · 双指拖动旋转 · 双指捏合缩放</div>
   <script>
 console.warn('Scripts "build/three.js" and "build/three.min.js" are deprecated with r150+, and will be removed with r160. Please use ES Modules or alternatives: https://threejs.org/docs/index.html#manual/en/introduction/Installation'),
 /**
@@ -261,25 +284,45 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
 
   let pressing = false, dragging = false, lastX = 0, lastY = 0, downX = 0, downY = 0;
   let rotY = 0.18, rotX = -0.08, targetZoom = 1;
+  let pinchDist = 0, pinchMidX = 0, pinchMidY = 0;
 
-  function setMouseFromEvent(e) {
-    mouse.x = (e.clientX / innerWidth) * 2 - 1;
-    mouse.y = -(e.clientY / innerHeight) * 2 + 1;
+  function setMouseFromXY(x, y) {
+    mouse.x = (x / Math.max(innerWidth, 1)) * 2 - 1;
+    mouse.y = -(y / Math.max(innerHeight, 1)) * 2 + 1;
     hasMouse = true;
   }
+  function setMouseFromEvent(e) {
+    setMouseFromXY(e.clientX, e.clientY);
+  }
 
-  document.addEventListener("pointerenter", setMouseFromEvent);
+  const hintEl = document.getElementById("hint");
+  if (hintEl && (matchMedia("(pointer: coarse)").matches || navigator.maxTouchPoints > 0)) {
+    hintEl.textContent = "单指滑动穿梭打散粒子 · 双指拖动旋转 · 双指捏合缩放";
+  } else if (hintEl) {
+    hintEl.textContent = "移动鼠标穿梭打散粒子 · 按住拖动旋转 · 滚轮缩放";
+  }
+
+  renderer.domElement.style.touchAction = "none";
+
+  document.addEventListener("pointerenter", (e) => {
+    if (e.pointerType === "mouse") setMouseFromEvent(e);
+  });
   document.addEventListener("pointerdown", (e) => {
-    if (e.button !== 0) return;
+    if (e.pointerType !== "mouse" || e.button !== 0) return;
     pressing = true;
     dragging = false;
     lastX = downX = e.clientX;
     lastY = downY = e.clientY;
     setMouseFromEvent(e);
   });
-  document.addEventListener("pointerup", () => { pressing = false; dragging = false; });
-  document.addEventListener("pointercancel", () => { pressing = false; dragging = false; });
+  document.addEventListener("pointerup", (e) => {
+    if (e.pointerType === "mouse") { pressing = false; dragging = false; }
+  });
+  document.addEventListener("pointercancel", (e) => {
+    if (e.pointerType === "mouse") { pressing = false; dragging = false; }
+  });
   document.addEventListener("pointermove", (e) => {
+    if (e.pointerType !== "mouse") return;
     setMouseFromEvent(e);
     if (!pressing) return;
     if (!dragging) {
@@ -294,14 +337,57 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
     lastX = e.clientX;
     lastY = e.clientY;
   });
+
+  function applyTwoFinger(a, b) {
+    const mx = (a.clientX + b.clientX) / 2;
+    const my = (a.clientY + b.clientY) / 2;
+    const dist = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+    if (pinchDist > 0) {
+      rotY -= (mx - pinchMidX) * 0.005;
+      rotX -= (my - pinchMidY) * 0.0035;
+      rotX = Math.max(-0.7, Math.min(0.55, rotX));
+      if (dist > 1 && pinchDist > 1) {
+        targetZoom = THREE.MathUtils.clamp(targetZoom * (pinchDist / dist), 0.72, 1.55);
+      }
+    }
+    pinchMidX = mx;
+    pinchMidY = my;
+    pinchDist = dist;
+  }
+
+  function onTouch(e) {
+    e.preventDefault();
+    if (e.touches.length === 1) {
+      pinchDist = 0;
+      setMouseFromXY(e.touches[0].clientX, e.touches[0].clientY);
+    } else if (e.touches.length >= 2) {
+      applyTwoFinger(e.touches[0], e.touches[1]);
+    }
+  }
+  function onTouchEnd(e) {
+    e.preventDefault();
+    if (e.touches.length < 2) pinchDist = 0;
+    if (e.touches.length === 1) {
+      setMouseFromXY(e.touches[0].clientX, e.touches[0].clientY);
+    }
+  }
+  document.addEventListener("touchstart", onTouch, { passive: false });
+  document.addEventListener("touchmove", onTouch, { passive: false });
+  document.addEventListener("touchend", onTouchEnd, { passive: false });
+  document.addEventListener("touchcancel", onTouchEnd, { passive: false });
+  document.addEventListener("gesturestart", (e) => e.preventDefault());
+  document.addEventListener("gesturechange", (e) => e.preventDefault());
+
   addEventListener("wheel", (e) => {
     targetZoom = THREE.MathUtils.clamp(targetZoom + e.deltaY * 0.0012, 0.72, 1.55);
   }, { passive: true });
-  addEventListener("resize", () => {
+  function resize() {
     camera.aspect = innerWidth / innerHeight;
     camera.updateProjectionMatrix();
     renderer.setSize(innerWidth, innerHeight);
-  });
+  }
+  addEventListener("resize", resize);
+  if (window.visualViewport) visualViewport.addEventListener("resize", resize);
 
   const clock = new THREE.Clock();
   const blobWorld = new THREE.Vector3();
