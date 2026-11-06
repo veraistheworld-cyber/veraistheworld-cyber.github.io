@@ -308,6 +308,9 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       rotY -= (mx - pinchMidX) * 0.005;
       rotX -= (my - pinchMidY) * 0.0035;
       rotX = Math.max(-0.7, Math.min(0.55, rotX));
+      if (dist > 1 && pinchDist > 1) {
+        targetZoom = THREE.MathUtils.clamp(targetZoom * (pinchDist / dist), 0.72, 1.55);
+      }
     }
     pinchMidX = mx;
     pinchMidY = my;
@@ -337,7 +340,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
   const hintEl = document.getElementById("hint");
   if (hintEl) {
     hintEl.textContent = coarse
-      ? "一根手指移动光标 · 两根手指拖动旋转"
+      ? "一根手指移动光标 · 两根手指拖动旋转 · 双指捏合缩放"
       : "移动鼠标控制光标 · 按住拖动旋转 · 滚轮缩放";
   }
 
