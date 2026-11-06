@@ -282,101 +282,131 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
   const vel = new Float32Array(count * 3);
   const disp = new Float32Array(count * 3);
 
-  let pressing = false, dragging = false, lastX = 0, lastY = 0, downX = 0, downY = 0;
   let rotY = 0.18, rotX = -0.08, targetZoom = 1;
   let pinchDist = 0, pinchMidX = 0, pinchMidY = 0;
+  const pointers = new Map();
+  const coarse = matchMedia("(pointer: coarse)").matches || (navigator.maxTouchPoints || 0) > 0;
 
   function setMouseFromXY(x, y) {
     mouse.x = (x / Math.max(innerWidth, 1)) * 2 - 1;
     mouse.y = -(y / Math.max(innerHeight, 1)) * 2 + 1;
     hasMouse = true;
   }
-  function setMouseFromEvent(e) {
-    setMouseFromXY(e.clientX, e.clientY);
+
+  function isRealMouse(e) {
+    if (e.pointerType === "touch" || e.pointerType === "pen") return false;
+    if (e.sourceCapabilities && e.sourceCapabilities.firesTouchEvents) return false;
+    if (coarse) return false;
+    return e.pointerType === "mouse";
   }
-
-  const hintEl = document.getElementById("hint");
-  if (hintEl && (matchMedia("(pointer: coarse)").matches || navigator.maxTouchPoints > 0)) {
-    hintEl.textContent = "单指滑动穿梭打散粒子 · 双指拖动旋转 · 双指捏合缩放";
-  } else if (hintEl) {
-    hintEl.textContent = "移动鼠标穿梭打散粒子 · 按住拖动旋转 · 滚轮缩放";
-  }
-
-  renderer.domElement.style.touchAction = "none";
-
-  document.addEventListener("pointerenter", (e) => {
-    if (e.pointerType === "mouse") setMouseFromEvent(e);
-  });
-  document.addEventListener("pointerdown", (e) => {
-    if (e.pointerType !== "mouse" || e.button !== 0) return;
-    pressing = true;
-    dragging = false;
-    lastX = downX = e.clientX;
-    lastY = downY = e.clientY;
-    setMouseFromEvent(e);
-  });
-  document.addEventListener("pointerup", (e) => {
-    if (e.pointerType === "mouse") { pressing = false; dragging = false; }
-  });
-  document.addEventListener("pointercancel", (e) => {
-    if (e.pointerType === "mouse") { pressing = false; dragging = false; }
-  });
-  document.addEventListener("pointermove", (e) => {
-    if (e.pointerType !== "mouse") return;
-    setMouseFromEvent(e);
-    if (!pressing) return;
-    if (!dragging) {
-      const dx = e.clientX - downX;
-      const dy = e.clientY - downY;
-      if (dx * dx + dy * dy < 64) return;
-      dragging = true;
-    }
-    rotY -= (e.clientX - lastX) * 0.005;
-    rotX -= (e.clientY - lastY) * 0.0035;
-    rotX = Math.max(-0.7, Math.min(0.55, rotX));
-    lastX = e.clientX;
-    lastY = e.clientY;
-  });
 
   function applyTwoFinger(a, b) {
-    const mx = (a.clientX + b.clientX) / 2;
-    const my = (a.clientY + b.clientY) / 2;
-    const dist = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+    const mx = (a.x + b.x) / 2;
+    const my = (a.y + b.y) / 2;
+    const dist = Math.hypot(a.x - b.x, a.y - b.y);
     if (pinchDist > 0) {
       rotY -= (mx - pinchMidX) * 0.005;
       rotX -= (my - pinchMidY) * 0.0035;
       rotX = Math.max(-0.7, Math.min(0.55, rotX));
-      if (dist > 1 && pinchDist > 1) {
-        targetZoom = THREE.MathUtils.clamp(targetZoom * (pinchDist / dist), 0.72, 1.55);
-      }
     }
     pinchMidX = mx;
     pinchMidY = my;
     pinchDist = dist;
   }
 
-  function onTouch(e) {
+  function syncPointers() {
+    const list = [...pointers.values()];
+    if (list.length >= 2) {
+      applyTwoFinger(list[0], list[1]);
+      return;
+    }
+    pinchDist = 0;
+    if (list.length === 1) {
+      const p = list[0];
+      setMouseFromXY(p.x, p.y);
+      if (p.mouseDrag) {
+        rotY -= (p.x - p.lastX) * 0.005;
+        rotX -= (p.y - p.lastY) * 0.0035;
+        rotX = Math.max(-0.7, Math.min(0.55, rotX));
+      }
+      p.lastX = p.x;
+      p.lastY = p.y;
+    }
+  }
+
+  const hintEl = document.getElementById("hint");
+  if (hintEl) {
+    hintEl.textContent = coarse
+      ? "一根手指移动光标 · 两根手指拖动旋转"
+      : "移动鼠标控制光标 · 按住拖动旋转 · 滚轮缩放";
+  }
+
+  renderer.domElement.style.touchAction = "none";
+
+  function onPointerDown(e) {
     e.preventDefault();
-    if (e.touches.length === 1) {
+    try { renderer.domElement.setPointerCapture(e.pointerId); } catch (_) {}
+    pointers.set(e.pointerId, {
+      x: e.clientX,
+      y: e.clientY,
+      lastX: e.clientX,
+      lastY: e.clientY,
+      mouseDrag: isRealMouse(e) && e.button === 0
+    });
+    if (pointers.size >= 2) {
+      for (const p of pointers.values()) p.mouseDrag = false;
       pinchDist = 0;
-      setMouseFromXY(e.touches[0].clientX, e.touches[0].clientY);
-    } else if (e.touches.length >= 2) {
-      applyTwoFinger(e.touches[0], e.touches[1]);
     }
+    syncPointers();
   }
-  function onTouchEnd(e) {
+  function onPointerMove(e) {
+    if (!pointers.has(e.pointerId)) {
+      if (isRealMouse(e) && pointers.size === 0) setMouseFromXY(e.clientX, e.clientY);
+      return;
+    }
     e.preventDefault();
-    if (e.touches.length < 2) pinchDist = 0;
-    if (e.touches.length === 1) {
-      setMouseFromXY(e.touches[0].clientX, e.touches[0].clientY);
+    const p = pointers.get(e.pointerId);
+    p.x = e.clientX;
+    p.y = e.clientY;
+    syncPointers();
+  }
+  function onPointerUp(e) {
+    pointers.delete(e.pointerId);
+    if (pointers.size < 2) pinchDist = 0;
+    if (pointers.size === 1) {
+      const p = [...pointers.values()][0];
+      p.lastX = p.x;
+      p.lastY = p.y;
     }
   }
-  document.addEventListener("touchstart", onTouch, { passive: false });
-  document.addEventListener("touchmove", onTouch, { passive: false });
-  document.addEventListener("touchend", onTouchEnd, { passive: false });
-  document.addEventListener("touchcancel", onTouchEnd, { passive: false });
-  document.addEventListener("gesturestart", (e) => e.preventDefault());
-  document.addEventListener("gesturechange", (e) => e.preventDefault());
+
+  window.addEventListener("pointerdown", onPointerDown, { passive: false, capture: true });
+  window.addEventListener("pointermove", onPointerMove, { passive: false, capture: true });
+  window.addEventListener("pointerup", onPointerUp, { capture: true });
+  window.addEventListener("pointercancel", onPointerUp, { capture: true });
+
+  let pointerTookOver = false;
+  window.addEventListener("pointerdown", () => { pointerTookOver = true; }, true);
+
+  function syncFromTouchList(list) {
+    pointers.clear();
+    for (let i = 0; i < list.length; i++) {
+      const t = list[i];
+      pointers.set(t.identifier, { x: t.clientX, y: t.clientY, lastX: t.clientX, lastY: t.clientY, mouseDrag: false });
+    }
+    syncPointers();
+  }
+  function onTouch(e) {
+    if (pointerTookOver) return;
+    e.preventDefault();
+    syncFromTouchList(e.touches);
+  }
+  window.addEventListener("touchstart", onTouch, { passive: false, capture: true });
+  window.addEventListener("touchmove", onTouch, { passive: false, capture: true });
+  window.addEventListener("touchend", onTouch, { passive: false, capture: true });
+  window.addEventListener("touchcancel", onTouch, { passive: false, capture: true });
+  window.addEventListener("gesturestart", (e) => e.preventDefault(), { capture: true });
+  window.addEventListener("gesturechange", (e) => e.preventDefault(), { capture: true });
 
   addEventListener("wheel", (e) => {
     targetZoom = THREE.MathUtils.clamp(targetZoom + e.deltaY * 0.0012, 0.72, 1.55);
