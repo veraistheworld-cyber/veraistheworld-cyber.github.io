@@ -285,7 +285,8 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
   let rotY = 0.18, rotX = -0.08, targetZoom = 1;
   let pinchDist = 0, pinchMidX = 0, pinchMidY = 0;
   const pointers = new Map();
-  const coarse = matchMedia("(pointer: coarse)").matches || (navigator.maxTouchPoints || 0) > 0;
+  const hasFinePointer = matchMedia("(hover: hover) and (pointer: fine)").matches;
+  // particle-cabinet-desktop-v3 — mouse works even on touchscreen PCs
 
   function setMouseFromXY(x, y) {
     mouse.x = (x / Math.max(innerWidth, 1)) * 2 - 1;
@@ -296,8 +297,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
   function isRealMouse(e) {
     if (e.pointerType === "touch" || e.pointerType === "pen") return false;
     if (e.sourceCapabilities && e.sourceCapabilities.firesTouchEvents) return false;
-    if (coarse) return false;
-    return e.pointerType === "mouse";
+    return e.pointerType === "mouse" || e.pointerType === "";
   }
 
   function applyTwoFinger(a, b) {
@@ -339,9 +339,9 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
 
   const hintEl = document.getElementById("hint");
   if (hintEl) {
-    hintEl.textContent = coarse
-      ? "一根手指移动光标 · 两根手指拖动旋转 · 双指捏合缩放"
-      : "移动鼠标控制光标 · 按住拖动旋转 · 滚轮缩放";
+    hintEl.textContent = hasFinePointer
+      ? "移动鼠标控制光标 · 按住拖动旋转 · 滚轮缩放"
+      : "一根手指移动光标 · 两根手指拖动旋转 · 双指捏合缩放";
   }
 
   renderer.domElement.style.touchAction = "none";
