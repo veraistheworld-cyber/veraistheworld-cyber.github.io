@@ -278,6 +278,8 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
   const lookTarget = new THREE.Vector3(0.12, 0.04, 0);
   let hasMouse = false;
   blob.position.copy(targetBlob);
+  const blobVel = new THREE.Vector3();
+  let particleResist = 0;
 
   const vel = new Float32Array(count * 3);
   const disp = new Float32Array(count * 3);
@@ -286,7 +288,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
   let pinchDist = 0, pinchMidX = 0, pinchMidY = 0;
   const pointers = new Map();
   const hasFinePointer = matchMedia("(hover: hover) and (pointer: fine)").matches;
-  // particle-cabinet-desktop-v3 — mouse works even on touchscreen PCs
+  // particle-cabinet-desktop-v4 — viscous drag when the cursor hits particles
 
   function setMouseFromXY(x, y) {
     mouse.x = (x / Math.max(innerWidth, 1)) * 2 - 1;
@@ -453,9 +455,32 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
     const assemble = THREE.MathUtils.smoothstep(t, 0.15, 2.8);
 
     updateBlobTarget();
-    if (hasMouse) blob.position.copy(targetBlob);
+    if (hasMouse) {
+      const resist = particleResist;
+      if (resist < 0.04) {
+        blob.position.copy(targetBlob);
+        blobVel.set(0, 0, 0);
+      } else {
+        const u = THREE.MathUtils.smoothstep(resist, 0.04, 1.0);
+        const spring = THREE.MathUtils.lerp(72, 14, u);
+        const damp = THREE.MathUtils.lerp(15, 22, u);
+        const maxSpd = THREE.MathUtils.lerp(11, 1.9, u);
+        blobVel.x += (targetBlob.x - blob.position.x) * spring * dt;
+        blobVel.y += (targetBlob.y - blob.position.y) * spring * dt;
+        blobVel.z += (targetBlob.z - blob.position.z) * spring * dt;
+        blobVel.multiplyScalar(Math.exp(-damp * dt));
+        const spd = blobVel.length();
+        if (spd > maxSpd) blobVel.multiplyScalar(maxSpd / spd);
+        blob.position.x += blobVel.x * dt;
+        blob.position.y += blobVel.y * dt;
+        blob.position.z += blobVel.z * dt;
+      }
+    } else {
+      blobVel.set(0, 0, 0);
+    }
     blob.scale.setScalar(0.92 + Math.sin(t * 5.5) * 0.1);
     blob.getWorldPosition(blobWorld);
+    let density = 0;
 
     const arr = geo.attributes.position.array;
     const radius = 0.95;
@@ -479,6 +504,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       if (hasMouse && d2 < r2 && d2 > 1e-6) {
         const d = Math.sqrt(d2);
         const fall = 1 - d / radius;
+        density += fall * fall;
         let strength = pushForce * fall * fall;
         if (d < 0.32) strength += (0.32 - d) * 55;
         vel[i3] += (dx / d) * strength * dt;
@@ -502,6 +528,9 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       arr[i3+2] = az + oz;
     }
     geo.attributes.position.needsUpdate = true;
+
+    const targetResist = THREE.MathUtils.clamp((density - 10) / 90, 0, 1);
+    particleResist += (targetResist - particleResist) * (1 - Math.exp(-10 * dt));
 
     const base = new THREE.Vector3(3.4, 1.05, 8.55).multiplyScalar(targetZoom);
     const eul = new THREE.Euler(rotX, rotY, 0, "YXZ");
