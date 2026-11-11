@@ -1,0 +1,33 @@
+Listening Cabinet — Technics SL-P1200 interactive sample
+Audio packaged with this page (excerpts encoded as 80 kbps MP3):
+
+1. Muzio Clementi — 6 Sonatinas for Piano, Op. 36, No. 1, II. Andante
+   Performance: Alessio Cesaroni
+   Source: Musopen, via Wikimedia Commons
+   License: CC0 1.0 Universal
+   https://commons.wikimedia.org/wiki/File:Clementi,_Sonatina_N.1_-_2_Mov._Andante.ogg
+   This package: complete recording (~1:21).
+
+2. J.S. Bach — The Well-Tempered Clavier, Book I, Prelude and Fugue No. 1 in C major, BWV 846
+   Performance: Musopen
+   Source: Musopen, via Wikimedia Commons
+   License: CC0 1.0 Universal
+   https://commons.wikimedia.org/wiki/File:JS_Bach_-_Well_Tempered_Clavier_-_Prelude_in_Fugue_No.1_in_C_major.ogg
+   This package: first 85 seconds, faded out.
+
+3. Ludwig van Beethoven — Minuet in G major, WoO 10 No. 2
+   Performance: Musopen public-domain recording (per the Wikimedia file page)
+   Source: Musopen, via Wikimedia Commons
+   License: Public domain (composition and this performance)
+   https://commons.wikimedia.org/wiki/File:Minuet_in_G_(Beethoven),_piano.ogg
+   This package: first 85 seconds, faded out.
+
+4. Frédéric Chopin — Nocturne No. 2 in E-flat major, Op. 9
+   Performance: Musopen
+   Source: Musopen, via Wikimedia Commons
+   License: CC0 1.0 Universal
+   https://commons.wikimedia.org/wiki/File:Chopin_Nocturne_No._2_in_E_Flat_Major,_Op._9.ogg
+   This package: first 85 seconds, faded out.
+
+Album cover artwork, 3D models and page code are original to this sample.
+The Technics SL-P1200 appearance is a historical visual homage, not an official product.
