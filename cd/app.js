@@ -1717,14 +1717,18 @@
   function loadTex(name, path) {
     tex[name] = loader.load(path);
   }
-  loadTex("wood", "tex/wood.jpg");
-  loadTex("metal", "tex/metal.jpg");
-  loadTex("rainbow", "tex/cd-rainbow.jpg");
+  function packedTex(name, fallback) {
+    return (window.CD_TEX && window.CD_TEX[name]) || fallback;
+  }
+  loadTex("wood", packedTex("wood", "tex/wood.jpg"));
+  loadTex("metal", packedTex("metal", "tex/metal.jpg"));
+  loadTex("rainbow", packedTex("rainbow", "tex/cd-rainbow.jpg"));
   ALBUMS.forEach(function (a) {
-    loadTex("cover-" + a.id, "tex/cover-" + a.id + ".jpg");
-    loadTex("back-" + a.id, "tex/back-" + a.id + ".jpg");
-    loadTex("spine-" + a.id, "tex/spine-" + a.id + ".jpg");
-    loadTex("booklet-" + a.id, "tex/booklet-" + a.id + ".jpg");
-    loadTex("label-" + a.id, "tex/label-" + a.id + ".jpg");
+    loadTex("cover-" + a.id, packedTex("cover-" + a.id, "tex/cover-" + a.id + ".jpg"));
+    loadTex("back-" + a.id, packedTex("back-" + a.id, "tex/back-" + a.id + ".jpg"));
+    loadTex("spine-" + a.id, packedTex("spine-" + a.id, "tex/spine-" + a.id + ".jpg"));
+    loadTex("booklet-" + a.id, packedTex("booklet-" + a.id, "tex/booklet-" + a.id + ".jpg"));
+    loadTex("label-" + a.id, packedTex("label-" + a.id, "tex/label-" + a.id + ".jpg"));
+    if (window.CD_AUDIO && window.CD_AUDIO[a.id]) a.audio = window.CD_AUDIO[a.id];
   });
 })();
