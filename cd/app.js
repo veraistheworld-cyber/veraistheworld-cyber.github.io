@@ -1,4 +1,4 @@
-/* panasonic-cd-v1 */
+/* panasonic-cd-v2 */
 (function () {
   "use strict";
 
@@ -219,19 +219,42 @@
     try { audio.playbackRate = rate; } catch (e) {}
   }
 
+  function albumSrc(album) {
+    if (window.CD_AUDIO && window.CD_AUDIO[album.id]) return window.CD_AUDIO[album.id];
+    return album.audio;
+  }
+
   function loadAlbumAudio(album) {
-    if (audio.src.indexOf(album.audio) === -1) {
-      audio.src = album.audio;
-      audio.load();
+    var src = albumSrc(album);
+    album.audio = src;
+    var cur = audio.getAttribute("src") || audio.src || "";
+    if (cur !== src && cur.indexOf(src.slice(0, 96)) === -1) {
+      audio.src = src;
     }
+  }
+
+  // Call from a click: start playback in the same gesture so the browser will not block it later.
+  function armPlayback(album) {
+    ensureAudioCtx();
+    loadAlbumAudio(album);
+    applyPitch();
+    audio.muted = false;
+    audio.volume = 0.0001;
+    var p = audio.play();
+    if (p && p.catch) p.catch(function (err) { console.warn("arm play", err); });
+    audio._armed = true;
   }
 
   function startPlay() {
     if (!state.playerAlbum) return;
     loadAlbumAudio(state.playerAlbum);
     applyPitch();
-    var p = audio.play();
-    if (p && p.catch) p.catch(function () {});
+    audio.muted = false;
+    audio.volume = 1;
+    if (audio.paused) {
+      var p = audio.play();
+      if (p && p.catch) p.catch(function (err) { console.warn("play", err); });
+    }
     state.transport = "play";
     updateHint();
   }
@@ -1296,15 +1319,7 @@
 
   function loadFromOpenCase(caseG) {
     var album = caseG.userData.album;
-    unlockAudioFromGesture();
-    loadAlbumAudio(album);
-    // prime play in the same gesture
-    audio.muted = true;
-    var primed = audio.play();
-    if (primed && primed.catch) primed.catch(function () {});
-    audio.pause();
-    audio.muted = false;
-    try { audio.currentTime = 0; } catch (e) {}
+    armPlayback(album);
 
     setBusy(true);
     var steps = [];
@@ -1351,11 +1366,13 @@
       openCover(caseG, function () { setBusy(false); });
       return;
     }
-    // already open and empty: close and return
-    if (!caseG.userData.hasDisc) {
-      setBusy(true);
-      returnCase(caseG, function () { setBusy(false); });
+    // already open: take the disc (case hitbox used to swallow clicks on the disc)
+    if (caseG.userData.hasDisc) {
+      loadFromOpenCase(caseG);
+      return;
     }
+    setBusy(true);
+    returnCase(caseG, function () { setBusy(false); });
   }
 
   function onCdClicked(album, group) {
@@ -1367,14 +1384,7 @@
     }
     // CD hovering in hand — if well is open, place it
     if (state.handDisc === album) {
-      unlockAudioFromGesture();
-      loadAlbumAudio(album);
-      audio.muted = true;
-      var p = audio.play();
-      if (p && p.catch) p.catch(function () {});
-      audio.pause();
-      audio.muted = false;
-      try { audio.currentTime = 0; } catch (e) {}
+      armPlayback(album);
       setBusy(true);
       runSeq([
         function (n) { if (state.lid) n(); else setLid(true, n); },
@@ -1465,15 +1475,34 @@
     return { x: cx, y: cy };
   }
 
+  function resolveClickable(obj) {
+    while (obj && !obj.userData.clickable) obj = obj.parent;
+    return (obj && obj.userData.clickable) ? obj : null;
+  }
+
   function pick() {
     raycaster.setFromCamera(pointer, camera);
     var hits = raycaster.intersectObjects(clickables, true);
+    var best = null, bestPri = -1, firstDist = null, fallbackCase = null;
+    var priority = { cd: 6, btn: 5, lid: 4, well: 4, jog: 4, pitch: 4, power: 4, case: 2, player: 1, desk: 0 };
     for (var i = 0; i < hits.length; i++) {
-      var o = hits[i].object;
-      while (o && !o.userData.clickable) o = o.parent;
-      if (o && o.userData.clickable) return { obj: o, rec: hits[i] };
+      var o = resolveClickable(hits[i].object);
+      if (!o) continue;
+      var kind = o.userData.kind;
+      // Open jewel-case hitbox is a solid volume that covers the disc; skip it so the disc can be clicked.
+      if (kind === "case" && o.userData.group && o.userData.group.userData.open) {
+        if (!fallbackCase) fallbackCase = { obj: o, rec: hits[i] };
+        continue;
+      }
+      if (firstDist === null) firstDist = hits[i].distance;
+      if (hits[i].distance > firstDist + 0.08) continue;
+      var pri = priority[kind] != null ? priority[kind] : 1;
+      if (pri > bestPri) {
+        bestPri = pri;
+        best = { obj: o, rec: hits[i] };
+      }
     }
-    return null;
+    return best || fallbackCase;
   }
 
   function handleClick(hit) {
@@ -1708,7 +1737,7 @@
     ALBUMS.forEach(function (a) {
       var au = new Audio();
       au.preload = "auto";
-      au.src = a.audio;
+      au.src = albumSrc(a);
     });
   };
   manager.onError = function (u) { console.warn("load error", u); };
