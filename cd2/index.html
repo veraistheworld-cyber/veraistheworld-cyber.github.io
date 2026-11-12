@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="sample" content="panasonic-cd-v2" />
+  <title>旗舰听音位 · Technics SL-P1200</title>
+  <style>
+    /* panasonic-cd-v2 */
+    :root {
+      --bg: #120d0a;
+      --ink: #f3ead8;
+      --muted: #b7a48a;
+      --line: rgba(201, 168, 112, 0.45);
+      --ease: cubic-bezier(0.22, 1, 0.36, 1);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      width: 100%; height: 100%;
+      overflow: hidden;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: "Songti SC", "Noto Serif SC", "Source Han Serif SC", "STSong", Georgia, serif;
+      -webkit-tap-highlight-color: transparent;
+      touch-action: none;
+      user-select: none;
+    }
+    #c { display: block; width: 100%; height: 100%; height: 100dvh; }
+    #vignette {
+      position: fixed; inset: 0; pointer-events: none; z-index: 2;
+      background:
+        radial-gradient(ellipse 80% 70% at 50% 40%, transparent 40%, rgba(8,5,3,0.42) 100%),
+        linear-gradient(to top, rgba(8,5,3,0.35), transparent 22%);
+    }
+    #hint {
+      position: fixed; left: 0; right: 0; bottom: calc(28px + env(safe-area-inset-bottom));
+      text-align: center; z-index: 5;
+      font-size: 14px; letter-spacing: 0.18em;
+      color: var(--muted);
+      pointer-events: none;
+      text-shadow: 0 2px 16px rgba(0,0,0,0.8);
+      transition: opacity 0.4s var(--ease);
+    }
+    #bar {
+      position: fixed; left: 50%; transform: translateX(-50%);
+      bottom: calc(58px + env(safe-area-inset-bottom));
+      z-index: 6; display: flex; gap: 8px; flex-wrap: wrap; justify-content: center;
+      max-width: 96vw; opacity: 0; pointer-events: none;
+      transition: opacity 0.4s var(--ease);
+    }
+    body.near #bar { opacity: 1; pointer-events: auto; }
+    #bar button, #credits-btn {
+      appearance: none; border: 1px solid var(--line);
+      background: rgba(20,14,10,0.72);
+      color: var(--ink);
+      font: 13px/1 "Songti SC", "Noto Serif SC", Georgia, serif;
+      letter-spacing: 0.14em;
+      padding: 8px 14px;
+      border-radius: 999px;
+      cursor: pointer;
+      backdrop-filter: blur(8px);
+    }
+    #bar button:active, #credits-btn:active { background: rgba(80,60,36,0.85); }
+    #credits-btn {
+      position: fixed; top: calc(16px + env(safe-area-inset-top)); right: 16px; z-index: 6;
+    }
+    #credits {
+      display: none; position: fixed; inset: 0; z-index: 8;
+      background: rgba(8,5,3,0.72);
+      padding: 12vh 8vw 8vh;
+      overflow: auto;
+    }
+    #credits.open { display: block; }
+    #credits .card {
+      max-width: 520px; margin: 0 auto;
+      background: #1a130e; border: 1px solid var(--line);
+      padding: 28px 26px 22px; color: var(--ink);
+      pointer-events: auto;
+    }
+    #credits h2 { font-size: 18px; font-weight: 400; letter-spacing: 0.12em; margin-bottom: 14px; }
+    #credits p, #credits li { font-size: 13px; line-height: 1.7; color: var(--muted); }
+    #credits ol { padding-left: 1.2em; margin: 8px 0 16px; }
+    #credits a { color: #e6d3a8; }
+    #loading {
+      position: fixed; inset: 0; z-index: 10;
+      background: #120d0a; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; gap: 18px;
+      transition: opacity 0.7s var(--ease);
+    }
+    #loading.hide { opacity: 0; pointer-events: none; }
+    #loading .mark {
+      font-size: 13px; letter-spacing: 0.42em; color: #c9a86a;
+    }
+    #loading h1 {
+      font-weight: 400; font-size: clamp(28px, 5vw, 44px); letter-spacing: 0.16em;
+    }
+    #loading .sub { font-size: 13px; letter-spacing: 0.22em; color: var(--muted); }
+    #loading .bar {
+      width: min(240px, 60vw); height: 1px; background: #2a2118; margin-top: 10px; position: relative;
+    }
+    #loading .bar > i {
+      position: absolute; left: 0; top: 0; bottom: 0; width: 0%;
+      background: #c9a86a; transition: width 0.25s linear;
+    }
+    #marker { position: absolute; width: 0; height: 0; overflow: hidden; }
+  </style>
+</head>
+<body>
+  <!-- panasonic-cd-v2 -->
+  <div id="marker">panasonic-cd-v2</div>
+  <canvas id="c"></canvas>
+  <div id="vignette"></div>
+  <div id="hint">点击机身靠近 · 点击珠宝盒拿起打开 · 放入播放</div>
+  <div id="bar">
+    <button type="button" id="btn-back">返回远景</button>
+    <button type="button" id="btn-play">播放</button>
+    <button type="button" id="btn-pause">暂停</button>
+    <button type="button" id="btn-stop">停止</button>
+    <button type="button" id="btn-eject">开盖取碟</button>
+  </div>
+  <button type="button" id="credits-btn">关于曲目</button>
+  <div id="credits">
+    <div class="card">
+      <h2>关于这台样机</h2>
+      <p>外观对标 1986–1993 年 Technics（松下音响品牌）旗舰专业机 SL-P1200：上盖装碟、荧光管显示、搜索转盘与 ±8% 变速推杆。这是历史外观复刻模型，并非官方产品。</p>
+      <p style="margin-top:12px">架子上四张碟的封面为原创设计。音乐来自公有领域 / CC0 录音（Musopen，经 Wikimedia Commons），已压成短 MP3 随页打包：</p>
+      <ol>
+        <li>Clementi《Sonatina Op.36 No.1 · Andante》，Alessio Cesaroni 演奏，CC0，完整约 1:21。</li>
+        <li>Bach《平均律第一册》BWV 846，Musopen，CC0，前 85 秒。</li>
+        <li>Beethoven《G 大调小步舞曲》WoO 10 No.2，Musopen 公有领域录音，前 85 秒。</li>
+        <li>Chopin《夜曲》Op.9 No.2，Musopen，CC0，前 85 秒。</li>
+      </ol>
+      <p>手机请点击操作（浏览器会拦截非手势的自动播放，放碟时的点击即是播放手势）。电脑端在空白桌面上拖动可轻微转动视角，拖动不要从珠宝盒上开始。</p>
+      <p style="margin-top:14px;text-align:right"><button type="button" id="credits-close" style="appearance:none;border:1px solid var(--line);background:transparent;color:var(--ink);padding:6px 14px;border-radius:999px;letter-spacing:0.14em;cursor:pointer">关闭</button></p>
+    </div>
+  </div>
+  <div id="loading">
+    <div class="mark">TECHNICS  ·  SL-P1200</div>
+    <h1>旗舰听音位</h1>
+    <div class="sub">上盖装碟 · 珠宝盒 · 荧光管</div>
+    <div class="bar"><i id="load-bar"></i></div>
+  </div>
+  <script src="../cd/three.min.js"></script>
+  <script src="../cd/assets-tex-a.js"></script>
+  <script src="../cd/assets-tex-b.js"></script>
+  <script src="../cd/assets-audio-1.js"></script>
+  <script src="../cd/assets-audio-2.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
